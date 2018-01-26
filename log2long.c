@@ -72,8 +72,8 @@ int main(int argc, char **argv)
 		}
 
 		sprint_long_canframe(ascframe, &cf,
-				     (CANLIB_VIEW_INDENT_SFF | CANLIB_VIEW_ASCII),
-				     maxdlen); /* with ASCII output */
+				     (CANLIB_VIEW_INDENT_SFF),
+				     maxdlen); /* without ASCII output */
 
 		printf("%s  %s  %s\n", timestamp, device, ascframe);
 	}
