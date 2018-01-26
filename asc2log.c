@@ -229,9 +229,9 @@ msg_list_t process_dbc(FILE *dbcfile)
 				strcpy(msg_list.data[index].name, m_name);
 			}
 		}
+		fclose(dbcfile);
 	}
 
-	fclose(dbcfile);
 	return msg_list;
 }
 
