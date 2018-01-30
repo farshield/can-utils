@@ -193,11 +193,13 @@ int get_date(struct timeval *tv, char *date) {
 			return 1;
 	}
     
-	//printf("h %d m %d s %d d %d m %d y %d\n",
-	//tms.tm_hour, tms.tm_min, tms.tm_sec,
-	//tms.tm_mday, tms.tm_mon+1, tms.tm_year+1900);
+	// printf("h %d m %d s %d d %d m %d y %d  daylight:%d\n",
+	// tms.tm_hour, tms.tm_min, tms.tm_sec,
+	// tms.tm_mday, tms.tm_mon+1, tms.tm_year+1900, tms.tm_isdst);
 
+	tms.tm_isdst = 0;
 	tv->tv_sec = mktime(&tms);
+	printf("%ld\n", tv->tv_sec);
 
 	if (tv->tv_sec < 0)
 		return 1;
