@@ -88,7 +88,7 @@ void print_usage(char *prg)
 	fprintf(stderr, "         -?           (help)\n");
 }
 
-void prframe(FILE *file, struct timeval *tv, int dev, struct can_frame *cf) 
+void prframe(FILE *file, struct timeval *tv, int dev, struct can_frame *cf)
 {
 	fprintf(file, "(%ld.%06ld) ", tv->tv_sec, tv->tv_usec);
 
@@ -101,7 +101,7 @@ void prframe(FILE *file, struct timeval *tv, int dev, struct can_frame *cf)
 	fprint_canframe(file, (struct canfd_frame *)cf, "\n", 0, CAN_MAX_DLEN);
 }
 
-void get_can_id(struct can_frame *cf, char *idstring, int base, msg_list_t *msg_list) 
+void get_can_id(struct can_frame *cf, char *idstring, int base, msg_list_t *msg_list)
 {
 	int i;
 	/* Check if idstring is in the MID_list and assign MID to can_id field if YES */
@@ -119,7 +119,7 @@ void get_can_id(struct can_frame *cf, char *idstring, int base, msg_list_t *msg_
 		idstring[strlen(idstring)-1] = 0;
 	} else
 		cf->can_id = 0;
-    
+
 	cf->can_id |= strtoul(idstring, NULL, base);
 }
 
@@ -140,7 +140,7 @@ void calc_tv(struct timeval *tv, struct timeval *read_tv,
 
 	} else { /* relative */
 
-		if (((!tv->tv_sec) && (!tv->tv_usec)) && 
+		if (((!tv->tv_sec) && (!tv->tv_usec)) &&
 		    (date_tv->tv_sec || date_tv->tv_usec)) {
 			tv->tv_sec  = date_tv->tv_sec; /* initial date/time */
 			tv->tv_usec = date_tv->tv_usec;
@@ -194,14 +194,14 @@ int get_date(struct timeval *tv, char *date)
 		if (!strptime(date, "%B %d %T %Y", &tms))
 			return 1;
 	}
-    
+
 	if (verbose)
 	{
 		printf("Date/Time read: h %d m %d s %d d %d m %d y %d  daylight:%d\n",
 			tms.tm_hour, tms.tm_min, tms.tm_sec,
 			tms.tm_mday, tms.tm_mon+1, tms.tm_year+1900, tms.tm_isdst);
 	}
-	
+
 	tms.tm_isdst = 0;  /* force disable daylight savings option */
 	tv->tv_sec = mktime(&tms);
 	if (verbose)
@@ -352,7 +352,7 @@ int main(int argc, char **argv)
 				continue;
 			}
 
-			/* check for the original logging date in the header */ 
+			/* check for the original logging date in the header */
 			if ((!date_tv.tv_sec) &&
 			    (!strncmp(buf, "date", 4))) {
 
@@ -382,7 +382,7 @@ int main(int argc, char **argv)
 				}
 			} else
 				continue; /* dplace remains zero until first found CAN frame */
-		} 
+		}
 
 		/* the representation of a valid CAN frame is known here */
 		/* so try to get CAN frames and ErrorFrames and convert them */
@@ -425,18 +425,18 @@ int main(int argc, char **argv)
 		if (found) {
 			if (rtr == 'r')
 				cf.can_id |= CAN_RTR_FLAG;
- 
+
 			cf.can_dlc = dlc & 0x0FU;
 			for (i=0; i<dlc; i++)
 				cf.data[i] = data[i] & 0xFFU;
 
+			calc_tv(&tv, &read_tv, &date_tv, timestamps, dplace);
 			if (raw_time)
 			{
 				prframe(outfile, &read_tv, interface, &cf);
 			}
 			else
 			{
-				calc_tv(&tv, &read_tv, &date_tv, timestamps, dplace);
 				prframe(outfile, &tv, interface, &cf);
 			}
 			fflush(outfile);
@@ -447,14 +447,14 @@ int main(int argc, char **argv)
 		if (sscanf(buf, "%ld.%ld %d %s",
 			   &read_tv.tv_sec, &read_tv.tv_usec,
 			   &interface, tmp1) == 4) {
-		
+
 			if (!strncmp(tmp1, "ErrorFrame", strlen("ErrorFrame"))) {
 
 				memset(&cf, 0, sizeof(cf));
 				/* do not know more than 'Error' */
 				cf.can_id  = (CAN_ERR_FLAG | CAN_ERR_BUSERROR);
 				cf.can_dlc =  CAN_ERR_DLC;
-		    
+
 				if (raw_time)
 				{
 					prframe(outfile, &read_tv, interface, &cf);
