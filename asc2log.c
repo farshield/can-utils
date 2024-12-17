@@ -56,13 +56,35 @@
 
 #include "lib.h"
 
+#define BUFFER_SZ 256
+#define MSG_NAME_MAX 64
+
 extern int optind, opterr, optopt;
+
+typedef struct _msg_t
+{
+	char name[MSG_NAME_MAX];
+	unsigned int id;
+} msg_t;
+
+typedef struct _msg_list_t
+{
+	unsigned int count;
+	msg_t *data;
+} msg_list_t;
+
+static int verbose = 0;
+static int raw_time = 0;
 
 void print_usage(char *prg)
 {
 	fprintf(stderr, "Usage: %s\n", prg);
 	fprintf(stderr, "Options: -I <infile>  (default stdin)\n");
 	fprintf(stderr, "         -O <outfile> (default stdout)\n");
+	fprintf(stderr, "         -D <dbcfile> (optional database)\n");
+	fprintf(stderr, "         -r           (raw timestamps)\n");
+	fprintf(stderr, "         -v           (verbose mode)\n");
+	fprintf(stderr, "         -?           (help)\n");
 }
 
 void prframe(FILE *file, struct timeval *tv, int dev, struct can_frame *cf) {
@@ -78,7 +100,18 @@ void prframe(FILE *file, struct timeval *tv, int dev, struct can_frame *cf) {
 	fprint_canframe(file, (struct canfd_frame *)cf, "\n", 0, CAN_MAX_DLEN);
 }
 
-void get_can_id(struct can_frame *cf, char *idstring, int base) {
+void get_can_id(struct can_frame *cf, char *idstring, int base, msg_list_t *msg_list) 
+{
+	int i;
+	/* Check if idstring is in the MID_list and assign MID to can_id field if YES */
+	for (i = 0; i < msg_list->count; i++)
+	{
+		if (strcmp(idstring, msg_list->data[i].name) == 0)
+		{
+			cf->can_id = msg_list->data[i].id;
+			return;
+		}
+	}
 
 	if (idstring[strlen(idstring)-1] == 'x') {
 		cf->can_id = CAN_EFF_FLAG;
@@ -132,7 +165,10 @@ int get_date(struct timeval *tv, char *date) {
 		/* assume EN/US date due to existing am/pm field */
 
 		if (!setlocale(LC_TIME, "en_US")) {
-			fprintf(stderr, "Setting locale to 'en_US' failed!\n");
+			if (verbose)
+			{
+				fprintf(stderr, "Setting locale to 'en_US' failed!\n");
+			}
 			return 1;
 		}
 
@@ -146,7 +182,10 @@ int get_date(struct timeval *tv, char *date) {
 			return 1;
 
 		if (!setlocale(LC_TIME, "de_DE")) {
-			fprintf(stderr, "Setting locale to 'de_DE' failed!\n");
+			if (verbose)
+			{
+				fprintf(stderr, "Setting locale to 'de_DE' failed!\n");
+			}
 			return 1;
 		}
 
@@ -166,13 +205,45 @@ int get_date(struct timeval *tv, char *date) {
 	return 0;
 }
 
+msg_list_t process_dbc(FILE *dbcfile)
+{
+	msg_list_t msg_list = {0, NULL};
+	char buf[BUFFER_SZ];
+
+	unsigned int index;
+	unsigned int m_id;
+	char m_name[MSG_NAME_MAX];
+
+	if (dbcfile)
+	{
+		while (fgets(buf, BUFFER_SZ - 1, dbcfile))
+		{
+			if (sscanf(buf, "BO_ %d %s %*d %*s", &m_id, m_name) == 2)
+			{
+				m_name[strlen(m_name) - 1] = '\0';
+				msg_list.count++;
+				msg_list.data = (msg_t *) realloc(msg_list.data, msg_list.count * sizeof(msg_t));
+
+				index = msg_list.count - 1;
+				msg_list.data[index].id = m_id;
+				strcpy(msg_list.data[index].name, m_name);
+			}
+		}
+	}
+
+	fclose(dbcfile);
+	return msg_list;
+}
+
 int main(int argc, char **argv)
 {
 	char buf[100], tmp1[100], tmp2[100];
+	msg_list_t msg_list;
 
 	FILE *infile = stdin;
 	FILE *outfile = stdout;
-	static int verbose;
+	FILE *dbcfile = NULL;
+
 	struct can_frame cf;
 	static struct timeval tv; /* current frame timestamp */
 	static struct timeval read_tv; /* frame timestamp from ASC file */
@@ -187,7 +258,8 @@ int main(int argc, char **argv)
 	int data[8];
 	int i, found, opt;
 
-	while ((opt = getopt(argc, argv, "I:O:v?")) != -1) {
+	/* Process command line arguments */
+	while ((opt = getopt(argc, argv, "I:O:D:rv?")) != -1) {
 		switch (opt) {
 		case 'I':
 			infile = fopen(optarg, "r");
@@ -203,6 +275,18 @@ int main(int argc, char **argv)
 				perror("outfile");
 				return 1;
 			}
+			break;
+
+		case 'D':
+			dbcfile = fopen(optarg, "r");
+			if (!dbcfile) {
+				perror("dbcfile");
+				return 1;
+			}
+			break;
+
+		case 'r':
+			raw_time = 1;
 			break;
 
 		case 'v':
@@ -222,7 +306,18 @@ int main(int argc, char **argv)
 		}
 	}
 
+	/* Read dbc file */
+	msg_list = process_dbc(dbcfile);
+	if (verbose)
+	{
+		printf("Reading messages from .dbc file:\n");
+		for (i = 0; i < msg_list.count; i++)
+		{
+			printf("[%d] %s\n", msg_list.data[i].id, msg_list.data[i].name);
+		}
+	}
 
+	/* Read trace file */
 	while (fgets(buf, 99, infile)) {
 
 		if (!dplace) { /* the representation of a valid CAN frame not known */
@@ -252,8 +347,12 @@ int main(int argc, char **argv)
 			    (!strncmp(buf, "date", 4))) {
 
 				if (get_date(&date_tv, &buf[9])) { /* skip 'date day ' */
-					fprintf(stderr, "Not able to determine original log "
-						"file date. Using current time.\n");
+					if (verbose)
+					{
+						fprintf(stderr, "Not able to determine original log "
+							"file date. Using current time.\n");
+					}
+
 					/* use current date as default */
 					gettimeofday(&date_tv, NULL);
 				}
@@ -292,7 +391,7 @@ int main(int argc, char **argv)
 				    ) == dlc + 6 ) {
 
 				found = 1;
-				get_can_id(&cf, tmp1, 16);
+				get_can_id(&cf, tmp1, 16, &msg_list);
 			}
 
 		} else { /* check for CAN frames with decimal values */
@@ -305,7 +404,7 @@ int main(int argc, char **argv)
 				    ) == dlc + 6 ) {
 
 				found = 1;
-				get_can_id(&cf, tmp1, 10);
+				get_can_id(&cf, tmp1, 10, &msg_list);
 			}
 		}
 
@@ -317,8 +416,15 @@ int main(int argc, char **argv)
 			for (i=0; i<dlc; i++)
 				cf.data[i] = data[i] & 0xFFU;
 
-			calc_tv(&tv, &read_tv, &date_tv, timestamps, dplace);
-			prframe(outfile, &tv, interface, &cf);
+			if (raw_time)
+			{
+				prframe(outfile, &read_tv, interface, &cf);
+			}
+			else
+			{
+				calc_tv(&tv, &read_tv, &date_tv, timestamps, dplace);
+				prframe(outfile, &tv, interface, &cf);
+			}
 			fflush(outfile);
 			continue;
 		}
@@ -335,13 +441,27 @@ int main(int argc, char **argv)
 				cf.can_id  = (CAN_ERR_FLAG | CAN_ERR_BUSERROR);
 				cf.can_dlc =  CAN_ERR_DLC;
 		    
-				calc_tv(&tv, &read_tv, &date_tv, timestamps, dplace);
-				prframe(outfile, &tv, interface, &cf);
+				if (raw_time)
+				{
+					prframe(outfile, &read_tv, interface, &cf);
+				}
+				else
+				{
+					calc_tv(&tv, &read_tv, &date_tv, timestamps, dplace);
+					prframe(outfile, &tv, interface, &cf);
+				}
 				fflush(outfile);
 			}
 		}
 	}
+
+	if (msg_list.data)
+	{
+		free(msg_list.data);
+	}
+
 	fclose(outfile);
 	fclose(infile);
+
 	return 0;
 }
