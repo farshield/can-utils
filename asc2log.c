@@ -58,6 +58,7 @@
 
 #define BUFFER_SZ 256
 #define MSG_NAME_MAX 64
+#define LINE_SZ 100
 
 extern int optind, opterr, optopt;
 
@@ -87,8 +88,8 @@ void print_usage(char *prg)
 	fprintf(stderr, "         -?           (help)\n");
 }
 
-void prframe(FILE *file, struct timeval *tv, int dev, struct can_frame *cf) {
-
+void prframe(FILE *file, struct timeval *tv, int dev, struct can_frame *cf) 
+{
 	fprintf(file, "(%ld.%06ld) ", tv->tv_sec, tv->tv_usec);
 
 	if (dev > 0)
@@ -123,7 +124,8 @@ void get_can_id(struct can_frame *cf, char *idstring, int base, msg_list_t *msg_
 }
 
 void calc_tv(struct timeval *tv, struct timeval *read_tv,
-	     struct timeval *date_tv, char timestamps, int dplace) {
+	     struct timeval *date_tv, char timestamps, int dplace)
+{
 
 	if (dplace == 4) /* shift values having only 4 decimal places */
 		read_tv->tv_usec *= 100;                /* and need for 6 */
@@ -154,8 +156,8 @@ void calc_tv(struct timeval *tv, struct timeval *read_tv,
 	}
 }
 
-int get_date(struct timeval *tv, char *date) {
-
+int get_date(struct timeval *tv, char *date)
+{
 	char ctmp[10];
 	int  itmp;
 
@@ -245,7 +247,7 @@ msg_list_t process_dbc(FILE *dbcfile)
 
 int main(int argc, char **argv)
 {
-	char buf[100], tmp1[100], tmp2[100];
+	char buf[LINE_SZ], tmp1[LINE_SZ], tmp2[LINE_SZ];
 	msg_list_t msg_list;
 
 	FILE *infile = stdin;
@@ -326,7 +328,7 @@ int main(int argc, char **argv)
 	}
 
 	/* Read trace file */
-	while (fgets(buf, 99, infile)) {
+	while (fgets(buf, LINE_SZ - 1, infile)) {
 
 		if (!dplace) { /* the representation of a valid CAN frame not known */
 
@@ -398,8 +400,10 @@ int main(int argc, char **argv)
 				   &data[4], &data[5], &data[6], &data[7]
 				    ) == dlc + 6 ) {
 
-				found = 1;
-				get_can_id(&cf, tmp1, 16, &msg_list);
+				if (strcmp(tmp1, "Statistic:") != 0) {
+					found = 1;
+					get_can_id(&cf, tmp1, 16, &msg_list);
+				}
 			}
 
 		} else { /* check for CAN frames with decimal values */
@@ -411,8 +415,10 @@ int main(int argc, char **argv)
 				   &data[4], &data[5], &data[6], &data[7]
 				    ) == dlc + 6 ) {
 
-				found = 1;
-				get_can_id(&cf, tmp1, 10, &msg_list);
+				if (strcmp(tmp1, "Statistic:") != 0) {
+					found = 1;
+					get_can_id(&cf, tmp1, 10, &msg_list);
+				}
 			}
 		}
 
